@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IYKYK Admin · 预约记录后台</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest"></script>
+<script>
+tailwind.config = { theme: { extend: { colors: {
+kpink: { 50:'#FFF5F7',100:'#FFE3E8',200:'#FFD6E0',300:'#FFB3C6',400:'#FF85A1',500:'#FF5C8A',600:'#E03A6E',700:'#C72557' },
+ktext: { primary:'#2D3748', secondary:'#718096', light:'#A0AEC0' },
+kbg: '#FCF8F9'
+}, fontFamily: { sans: ['Inter','sans-serif'] } } } }
+</script>
+<style>
+body { background:#FCF8F9; color:#2D3748; font-family:'Inter',sans-serif; }
+.k-glass { background:rgba(255,255,255,0.92); backdrop-filter:blur(16px); border:1px solid rgba(255,214,224,0.7); }
+.no-scrollbar::-webkit-scrollbar { display:none; }
+.no-scrollbar { -ms-overflow-style:none; scrollbar-width:none; }
+</style>
+</head>
+<body class="min-h-screen">
+
+<!-- ===== LOGIN GATE ===== -->
+<div id="login-gate" class="fixed inset-0 z-50 flex items-center justify-center bg-kbg p-4">
+<div class="bg-white w-full max-w-sm rounded-3xl p-8 shadow-2xl space-y-5">
+<div class="text-center space-y-2">
+<div class="w-12 h-12 mx-auto rounded-full bg-kpink-100 flex items-center justify-center text-kpink-500">
+<i data-lucide="shield-lock" class="w-6 h-6"></i>
+</div>
+<h2 class="text-lg font-bold text-ktext-primary">IYKYK 管理后台</h2>
+<p class="text-xs text-ktext-light">请输入管理密码以查看预约记录</p>
+</div>
+<div class="space-y-2">
+<input type="password" id="pwd" onkeydown="if(event.key==='Enter')check()" placeholder="管理密码" class="w-full bg-kbg border border-kpink-200 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-kpink-300 text-center tracking-widest">
+<p id="err" class="text-xs text-red-500 text-center hidden">密码错误</p>
+</div>
+<button onclick="check()" class="w-full bg-gradient-to-r from-kpink-400 to-kpink-500 hover:from-kpink-500 hover:to-kpink-600 text-white font-bold py-3 rounded-full text-sm transition-all">进入后台</button>
+<a href="iykyk-ticket.html" class="block text-center text-[10px] text-ktext-light hover:text-kpink-400 mt-2">← 返回主站</a>
+</div>
+</div>
+
+<!-- ===== DASHBOARD ===== -->
+<div id="dashboard" class="hidden max-w-6xl mx-auto px-4 py-8 space-y-6">
+<!-- Top bar -->
+<div class="flex items-center justify-between flex-wrap gap-3">
+<div class="flex items-center gap-2">
+<div class="w-8 h-8 rounded-full bg-gradient-to-tr from-kpink-400 to-kpink-200 flex items-center justify-center text-white font-black text-[10px]">IY</div>
+<div>
+<h1 class="text-lg font-extrabold text-ktext-primary">IYKYK 预约记录后台</h1>
+<p class="text-[10px] text-ktext-light">读取本浏览器 localStorage 数据</p>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<button onclick="syncCloud()" id="sync-btn" class="bg-blue-50 border border-blue-200 text-blue-500 font-semibold text-[11px] px-3 py-1.5 rounded-full hover:bg-blue-100 transition">🔄 同步云端</button>
+<button onclick="loadDemo()" class="bg-kpink-50 border border-kpink-200 text-kpink-600 font-semibold text-[11px] px-3 py-1.5 rounded-full hover:bg-kpink-100 transition">载入演示数据</button>
+<button onclick="exportCSV()" class="bg-white border border-gray-200 text-ktext-primary font-semibold text-[11px] px-3 py-1.5 rounded-full hover:bg-gray-50 transition">导出 CSV</button>
+<button onclick="exportJSON()" class="bg-white border border-gray-200 text-ktext-primary font-semibold text-[11px] px-3 py-1.5 rounded-full hover:bg-gray-50 transition">导出 JSON</button>
+<button onclick="clearAll()" class="bg-red-50 border border-red-200 text-red-500 font-semibold text-[11px] px-3 py-1.5 rounded-full hover:bg-red-100 transition">清空全部</button>
+<a href="iykyk-ticket.html" class="bg-gray-100 text-ktext-secondary font-semibold text-[11px] px-3 py-1.5 rounded-full hover:bg-gray-200 transition">返回主站</a>
+</div>
+</div>
+
+<!-- Notice -->
+<div class="bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-2 text-[11px] text-emerald-700 flex items-start gap-2">
+<i data-lucide="cloud" class="w-3.5 h-3.5 shrink-0 mt-0.5"></i>
+<span>已接入云端同步（JSONBin）。打开后台会自动拉取<b>所有访客</b>提交的预约纪录，点「🔄 同步云端」可手动刷新。状态修改、删除等操作也会同步回云端。</span>
+</div>
+
+<!-- Stats -->
+<div id="stats" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3"></div>
+
+<!-- Revenue -->
+<div id="revenue" class="grid grid-cols-2 md:grid-cols-4 gap-3"></div>
+
+<!-- Filters -->
+<div class="k-glass rounded-2xl p-4 space-y-3">
+<div class="flex flex-wrap items-center gap-2">
+<div class="relative flex-grow min-w-[160px]">
+<i data-lucide="search" class="w-3.5 h-3.5 text-ktext-light absolute left-3 top-1/2 -translate-y-1/2"></i>
+<input type="text" id="search" oninput="renderTable()" placeholder="搜索编号/演出/昵称/联系方式..." class="w-full bg-white border border-kpink-200 rounded-full pl-9 pr-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-kpink-300">
+</div>
+<select id="f-status" onchange="renderTable()" class="bg-white border border-kpink-200 rounded-full px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-kpink-300">
+<option value="">全部状态</option>
+<option value="待确认">待确认</option>
+<option value="已确认">已确认</option>
+<option value="抢票中">抢票中</option>
+<option value="已出票">已出票</option>
+<option value="已完成">已完成</option>
+<option value="已取消">已取消</option>
+<option value="已退款">已退款</option>
+</select>
+<select id="f-plan" onchange="renderTable()" class="bg-white border border-kpink-200 rounded-full px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-kpink-300">
+<option value="">全部方案</option>
+<option value="Success-First">Success-First</option>
+<option value="VIP-Priority">VIP-Priority</option>
+</select>
+<select id="sort" onchange="renderTable()" class="bg-white border border-kpink-200 rounded-full px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-kpink-300">
+<option value="newest">最新优先</option>
+<option value="oldest">最早优先</option>
+<option value="amount-desc">金额高→低</option>
+<option value="amount-asc">金额低→高</option>
+</select>
+<button onclick="importJSON()" class="bg-white border border-gray-200 text-ktext-primary font-semibold text-[11px] px-3 py-2 rounded-full hover:bg-gray-50 transition">导入 JSON</button>
+<input type="file" id="import-file" accept=".json" onchange="handleImport(event)" class="hidden">
+</div>
+</div>
+
+<!-- Table -->
+<div class="k-glass rounded-2xl overflow-hidden overflow-x-auto">
+<table class="w-full text-xs">
+<thead class="bg-kpink-50 text-ktext-secondary">
+<tr>
+<th class="text-left px-3 py-2 font-semibold">编号</th>
+<th class="text-left px-3 py-2 font-semibold">演出</th>
+<th class="text-left px-3 py-2 font-semibold">席位/张数</th>
+<th class="text-left px-3 py-2 font-semibold">方案</th>
+<th class="text-left px-3 py-2 font-semibold">客户</th>
+<th class="text-right px-3 py-2 font-semibold">金额</th>
+<th class="text-center px-3 py-2 font-semibold">状态</th>
+<th class="text-center px-3 py-2 font-semibold">时间</th>
+<th class="text-center px-3 py-2 font-semibold">操作</th>
+</tr>
+</thead>
+<tbody id="tbody"></tbody>
+</table>
+</div>
+
+<p id="empty-hint" class="text-center text-xs text-ktext-light py-8 hidden">暂无预约记录。点击「载入演示数据」预览效果，或前往主站提交预约。</p>
+</div>
+
+<!-- Detail Drawer -->
+<div id="detail-overlay" class="fixed inset-0 bg-black/40 z-50 hidden" onclick="closeDetail()">
+<div id="detail-panel" class="absolute right-0 top-0 h-full w-full max-w-md bg-white shadow-2xl overflow-y-auto" onclick="event.stopPropagation()">
+<div class="sticky top-0 bg-white border-b border-kpink-100 px-5 py-3 flex items-center justify-between">
+<h3 class="font-bold text-sm text-ktext-primary">订单详情</h3>
+<button onclick="closeDetail()" class="text-ktext-light hover:text-ktext-primary"><i data-lucide="x" class="w-4 h-4"></i></button>
+</div>
+<div id="detail-body" class="p-5 space-y-4 text-xs"></div>
+</div>
+</div>
+
+<script>
+const ORDERS_KEY = 'iykyk_m4_orders';
+const EVENTS_KEY = 'iykyk_m4_events';
+const ADMIN_PASSWORD = 'iykyk2026';
+const STATUS_OPTS = ['待确认','已确认','抢票中','已出票','已完成','已取消','已退款'];
+
+// ===== JSONBin 云端配置 =====
+const JSONBIN_API_KEY = '$2a$10$dZ3XYEuTW9ITIfuXZXDzk.MJohX8ao0OT4y6CNs6uYyrl/kgzjpUi';
+const JSONBIN_BIN_ID = '6aec7ba0ffd5d16053a8cd6a';
+const JSONBIN_BASE_URL = 'https://api.jsonbin.io/v3/b/' + JSONBIN_BIN_ID;
+
+// 云端缓存
+let cloudOrders = [];
+let cloudLoading = false;
+
+// 从云端拉取所有人的预约
+async function fetchCloudOrders() {
+cloudLoading = true;
+try {
+const res = await fetch(JSONBIN_BASE_URL + '/latest', {
+method: 'GET',
+headers: { 'X-Master-Key': JSONBIN_API_KEY }
+});
+if (res.ok) {
+const data = await res.json();
+cloudOrders = (data.record && data.record.orders) || [];
+}
+} catch(err) {
+console.warn('Fetch cloud orders failed:', err);
+}
+cloudLoading = false;
+}
+
+// 推送完整订单列表到云端
+async function pushCloudOrders(orders) {
+try {
+await fetch(JSONBIN_BASE_URL, {
+method: 'PUT',
+headers: {
+'Content-Type': 'application/json',
+'X-Master-Key': JSONBIN_API_KEY
+},
+body: JSON.stringify({ orders: orders })
+});
+cloudOrders = orders;
+return true;
+} catch(err) {
+console.warn('Push cloud orders failed:', err);
+return false;
+}
+}
+
+// ===== AUTH =====
+function check() {
+const v = document.getElementById('pwd').value;
+if (v === ADMIN_PASSWORD) {
+sessionStorage.setItem('iykyk_admin_authed','1');
+showDashboard();
+} else {
+document.getElementById('err').classList.remove('hidden');
+}
+}
+async function showDashboard() {
+document.getElementById('login-gate').classList.add('hidden');
+document.getElementById('dashboard').classList.remove('hidden');
+renderAll(); // 先渲染本地数据
+// 然后从云端拉取
+await fetchCloudOrders();
+renderAll(); // 合并后重新渲染
+showMsg('已同步云端数据，共 ' + getAllOrders().length + ' 条预约');
+}
+function logout() {
+sessionStorage.removeItem('iykyk_admin_authed');
+location.reload();
+}
+
+// ===== DATA =====
+// 合并本地 + 云端订单（按 id 去重，云端优先）
+function getAllOrders() {
+const local = getLocalOrders();
+const merged = [...local];
+cloudOrders.forEach(co => {
+if (!merged.find(lo => lo.id === co.id)) {
+merged.push(co);
+}
+});
+// 按 createdAt 排序，新的在前
+merged.sort((a,b) => {
+const ta = new Date(a.createdAt || 0).getTime();
+const tb = new Date(b.createdAt || 0).getTime();
+return tb - ta;
+});
+return merged;
+}
+function getLocalOrders() {
+try { return JSON.parse(localStorage.getItem(ORDERS_KEY)) || []; } catch(e) { return []; }
+}
+// 兼容旧调用
+function getOrders() { return getAllOrders(); }
+function saveOrders(arr) {
+localStorage.setItem(ORDERS_KEY, JSON.stringify(arr));
+// 同步到云端
+pushCloudOrders(arr);
+}
+function getEvents() {
+try { return JSON.parse(localStorage.getItem(EVENTS_KEY)) || []; } catch(e) { return []; }
+}
+
+function renderAll() { renderStats(); renderRevenue(); renderTable(); }
+
+function renderStats() {
+const orders = getOrders();
+const stats = { total: orders.length };
+STATUS_OPTS.forEach(s => stats[s] = 0);
+orders.forEach(o => {
+const s = o.adminStatus || '待确认';
+if (stats[s] !== undefined) stats[s]++;
+else stats['待确认']++;
+});
+const cards = [
+{ label:'预约总数', val: stats.total, color:'ktext-primary' },
+{ label:'待确认', val: stats['待确认'], color:'amber-500' },
+{ label:'已确认', val: stats['已确认'], color:'blue-500' },
+{ label:'抢票中', val: stats['抢票中'], color:'purple-500' },
+{ label:'已出票', val: stats['已出票'], color:'emerald-500' },
+{ label:'已取消/退款', val: (stats['已取消']||0)+(stats['已退款']||0), color:'red-400' },
+];
+document.getElementById('stats').innerHTML = cards.map(c =>
+`<div class="k-glass rounded-2xl p-3 text-center"><div class="text-[10px] text-ktext-light">${c.label}</div><div class="text-xl font-black text-${c.color}">${c.val}</div></div>`
+).join('');
+}
+
+function renderRevenue() {
+const orders = getOrders().filter(o => o.adminStatus !== '已取消' && o.adminStatus !== '已退款');
+let fee = 0, deposit = 0, balance = 0, face = 0;
+orders.forEach(o => {
+fee += Number(o.fee)||0;
+deposit += 100;
+balance += Number(o.balance)||0;
+face += Number(o.faceTotal)||0;
+});
+const cards = [
+{ label:'服务费收入(预估)', val:'¥'+fee, color:'kpink-600' },
+{ label:'已收定金', val:'¥'+deposit, color:'emerald-500' },
+{ label:'待收尾款', val:'¥'+balance, color:'amber-500' },
+{ label:'总票面金额', val:'¥'+face, color:'ktext-primary' },
+];
+document.getElementById('revenue').innerHTML = cards.map(c =>
+`<div class="k-glass rounded-2xl p-3 text-center"><div class="text-[10px] text-ktext-light">${c.label}</div><div class="text-lg font-bold text-${c.color}">${c.val}</div></div>`
+).join('');
+}
+
+function getFiltered() {
+let orders = getAllOrders();
+const q = document.getElementById('search').value.trim().toLowerCase();
+const fs = document.getElementById('f-status').value;
+const fp = document.getElementById('f-plan').value;
+const sort = document.getElementById('sort').value;
+if (q) orders = orders.filter(o =>
+(JSON.stringify(Object.values(o)).toLowerCase().includes(q)));
+if (fs) orders = orders.filter(o => (o.adminStatus||'待确认') === fs);
+if (fp) orders = orders.filter(o => o.plan === fp);
+orders.sort((a,b) => {
+const ta = new Date(a.createdAt || 0).getTime();
+const tb = new Date(b.createdAt || 0).getTime();
+if (sort==='oldest') return ta-tb;
+if (sort==='amount-desc') return (Number(b.total)||0)-(Number(a.total)||0);
+if (sort==='amount-asc') return (Number(a.total)||0)-(Number(b.total)||0);
+return tb-ta; // newest
+});
+return orders;
+}
+
+function fmtDate(o) {
+let d = o.createdAt || o.ts || o.timestamp;
+if (!d) return '-';
+if (typeof d === 'number') { try { d = new Date(d).toLocaleString('zh-CN'); } catch(e){ return '-'; } }
+return String(d).replace('T',' ').slice(0,19);
+}
+
+function renderTable() {
+const orders = getFiltered();
+const tbody = document.getElementById('tbody');
+const empty = document.getElementById('empty-hint');
+if (!orders.length) {
+tbody.innerHTML = '';
+empty.classList.remove('hidden');
+return;
+}
+empty.classList.add('hidden');
+tbody.innerHTML = orders.map((o) => {
+const oid = o.id || '';
+const status = o.adminStatus || '待确认';
+const statusColor = {
+'待确认':'bg-amber-100 text-amber-600',
+'已确认':'bg-blue-100 text-blue-600',
+'抢票中':'bg-purple-100 text-purple-600',
+'已出票':'bg-emerald-100 text-emerald-600',
+'已完成':'bg-gray-100 text-gray-600',
+'已取消':'bg-red-100 text-red-500',
+'已退款':'bg-red-100 text-red-500'
+}[status] || 'bg-gray-100 text-gray-500';
+return `<tr class="border-b border-gray-50 hover:bg-kpink-50/40">
+<td class="px-3 py-2.5 font-mono text-[10px] text-ktext-secondary">${o.id||'-'}</td>
+<td class="px-3 py-2.5 text-ktext-primary font-medium max-w-[160px] truncate" title="${o.show||''}">${(o.show||'-').slice(0,20)}</td>
+<td class="px-3 py-2.5 text-ktext-secondary">${o.tier||'-'} · ${o.qty||1}张</td>
+<td class="px-3 py-2.5 text-ktext-secondary">${o.plan||'-'}</td>
+<td class="px-3 py-2.5 text-ktext-secondary">${o.nick||'-'}<br><span class="text-[10px] text-ktext-light">${o.contact||''}</span></td>
+<td class="px-3 py-2.5 text-right"><span class="font-bold text-ktext-primary">¥${o.total||'-'}</span><br><span class="text-[9px] text-ktext-light">票面¥${o.faceTotal||'-'}+费¥${o.fee||'-'}</span></td>
+<td class="px-3 py-2.5 text-center"><span class="${statusColor} px-2 py-0.5 rounded-full text-[10px] font-semibold inline-block">${status}</span></td>
+<td class="px-3 py-2.5 text-[10px] text-ktext-light text-center">${fmtDate(o)}</td>
+<td class="px-3 py-2.5 text-center whitespace-nowrap">
+<button onclick="openDetail('${oid}')" class="text-ktext-light hover:text-kpink-500 p-1" title="详情"><i data-lucide="eye" class="w-3.5 h-3.5"></i></button>
+<select onchange="updateStatus('${oid}',this.value)" class="text-[10px] border border-gray-200 rounded-full px-1 py-0.5 bg-white">
+${STATUS_OPTS.map(s=>`<option ${s===status?'selected':''}>${s}</option>`).join('')}
+</select>
+<button onclick="deleteOrder('${oid}')" class="text-red-300 hover:text-red-500 p-1" title="删除"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+</td>
+</tr>`;
+}).join('');
+if (window.lucide) lucide.createIcons();
+}
+
+function findOrderById(id) {
+return getAllOrders().find(o => o.id === id);
+}
+function openDetail(oid) {
+const o = findOrderById(oid);
+if (!o) return;
+const body = document.getElementById('detail-body');
+const status = o.adminStatus || '待确认';
+body.innerHTML = `
+<div class="space-y-2">
+<h4 class="font-bold text-ktext-primary text-sm">演出信息</h4>
+<div class="bg-gray-50 rounded-xl p-3 space-y-1">
+<div><span class="text-ktext-light">编号:</span> <span class="font-mono">${o.id||'-'}</span></div>
+<div><span class="text-ktext-light">演出:</span> ${o.show||'-'}</div>
+<div><span class="text-ktext-light">席位:</span> ${o.tier||'-'}</div>
+<div><span class="text-ktext-light">张数:</span> ${o.qty||1}</div>
+<div><span class="text-ktext-light">韩元票价:</span> ${o.krw||'-'} ₩</div>
+</div>
+</div>
+<div class="space-y-2">
+<h4 class="font-bold text-ktext-primary text-sm">客户信息</h4>
+<div class="bg-gray-50 rounded-xl p-3 space-y-1">
+<div><span class="text-ktext-light">昵称:</span> ${o.nick||'-'}</div>
+<div><span class="text-ktext-light">联系方式:</span> ${o.contact||'-'}</div>
+<div><span class="text-ktext-light">提交语言:</span> ${o.lang||'-'}</div>
+<div><span class="text-ktext-light">测试标记:</span> ${o.testMode?'是':'否'}</div>
+</div>
+</div>
+<div class="space-y-2">
+<h4 class="font-bold text-ktext-primary text-sm">费用明细</h4>
+<div class="bg-gray-50 rounded-xl p-3 space-y-1">
+<div><span class="text-ktext-light">票面(人民币):</span> ¥${o.faceTotal||'-'}</div>
+<div><span class="text-ktext-light">服务费:</span> ¥${o.fee||'-'} (${o.rate?Math.round(o.rate*100):0}%)</div>
+<div><span class="text-ktext-light">总计:</span> <b>¥${o.total||'-'}</b></div>
+<div><span class="text-ktext-light">定金:</span> ¥${o.deposit||100}</div>
+<div><span class="text-ktext-light">余款:</span> ¥${o.balance||'-'}</div>
+<div><span class="text-ktext-light">方案:</span> ${o.plan||'-'}</div>
+</div>
+</div>
+<div class="space-y-2">
+<h4 class="font-bold text-ktext-primary text-sm">状态管理</h4>
+<div class="bg-gray-50 rounded-xl p-3 space-y-2">
+<div class="flex items-center gap-2">
+<span class="text-ktext-light">状态:</span>
+<select id="detail-status" onchange="updateStatus('${oid}',this.value)" class="text-xs border border-gray-200 rounded-full px-2 py-1 bg-white flex-1">
+${STATUS_OPTS.map(s=>`<option ${s===status?'selected':''}>${s}</option>`).join('')}
+</select>
+</div>
+<div><span class="text-ktext-light">创建时间:</span> ${fmtDate(o)}</div>
+<div><span class="text-ktext-light">更新时间:</span> ${o.updatedAt?fmtDate({createdAt:o.updatedAt}):'-'}</div>
+<textarea id="detail-note" placeholder="备注..." onchange="updateNote('${oid}',this.value)" class="w-full text-[11px] border border-gray-200 rounded-xl px-3 py-2 bg-white min-h-[60px]">${o.note||''}</textarea>
+</div>
+</div>`;
+document.getElementById('detail-overlay').classList.remove('hidden');
+if (window.lucide) lucide.createIcons();
+}
+function closeDetail() {
+document.getElementById('detail-overlay').classList.add('hidden');
+}
+
+function updateStatus(oid, status) {
+const orders = getAllOrders();
+const o = orders.find(o => o.id === oid);
+if (!o) return;
+o.adminStatus = status;
+o.updatedAt = new Date().toISOString();
+saveOrders(orders);
+renderAll();
+showMsg('状态已更新：' + status);
+}
+function updateNote(oid, note) {
+const orders = getAllOrders();
+const o = orders.find(o => o.id === oid);
+if (!o) return;
+o.note = note;
+o.updatedAt = new Date().toISOString();
+saveOrders(orders);
+showMsg('备注已保存');
+}
+function deleteOrder(oid) {
+const orders = getAllOrders();
+const o = orders.find(o => o.id === oid);
+if (!o) return;
+if (!confirm('确认删除订单 ' + o.id + '？此操作不可撤销。')) return;
+const idx = orders.indexOf(o);
+orders.splice(idx, 1);
+saveOrders(orders);
+renderAll();
+showMsg('已删除');
+}
+
+function exportCSV() {
+const orders = getOrders();
+if (!orders.length) { showMsg('无数据可导出'); return; }
+const headers = ['id','show','tier','qty','plan','nick','contact','krw','faceTotal','fee','total','deposit','balance','rate','adminStatus','lang','testMode','createdAt','updatedAt','note'];
+const rows = orders.map(o => headers.map(h => {
+let v = o[h] ?? '';
+if (v instanceof Date) v = v.toISOString();
+return `"${String(v).replace(/"/g,'""')}"`;
+}).join(','));
+const csv = '\uFEFF' + headers.join(',') + '\n' + rows.join('\n');
+download(csv, 'iykyk-orders.csv', 'text/csv');
+showMsg('CSV 已导出');
+}
+function exportJSON() {
+const orders = getOrders();
+if (!orders.length) { showMsg('无数据可导出'); return; }
+download(JSON.stringify(orders, null, 2), 'iykyk-orders.json', 'application/json');
+showMsg('JSON 已导出');
+}
+function importJSON() {
+document.getElementById('import-file').click();
+}
+function handleImport(e) {
+const file = e.target.files[0];
+if (!file) return;
+const reader = new FileReader();
+reader.onload = function(ev) {
+try {
+const data = JSON.parse(ev.target.result);
+if (!Array.isArray(data)) throw new Error('not array');
+const existing = getOrders();
+const merged = existing.concat(data);
+saveOrders(merged);
+renderAll();
+showMsg('已导入 ' + data.length + ' 条记录');
+} catch(err) {
+showMsg('导入失败：文件格式错误');
+}
+};
+reader.readAsText(file);
+e.target.value = '';
+}
+
+function clearAll() {
+const orders = getOrders();
+if (!orders.length) { showMsg('当前无数据'); return; }
+if (!confirm('确认清空全部 ' + orders.length + ' 条预约记录？此操作不可撤销！')) return;
+if (!confirm('再次确认：真的要清空全部数据吗？')) return;
+localStorage.removeItem(ORDERS_KEY);
+renderAll();
+showMsg('已清空全部数据');
+}
+
+function loadDemo() {
+const demo = [
+{ id:'M4-DEMO01', show:'2026 CHENLE B-day PARTY', tier:'VIP席', qty:1, plan:'Success-First', nick:'demo_user1', contact:'wechat:demo1', krw:77000, faceTotal:406, fee:61, total:467, deposit:100, balance:367, rate:0.15, adminStatus:'待确认', lang:'zh', testMode:false, createdAt:new Date(Date.now()-86400000*3).toISOString(), note:'' },
+{ id:'M4-DEMO02', show:'NCT WISH 2nd CONCERT TOUR', tier:'VIP席', qty:2, plan:'VIP-Priority', nick:'wish_fan', contact:'email:test@test.com', krw:220000, faceTotal:2320, fee:464, total:2784, deposit:100, balance:2684, rate:0.20, adminStatus:'已确认', lang:'en', testMode:false, createdAt:new Date(Date.now()-86400000*2).toISOString(), note:'客户希望靠近舞台' },
+{ id:'M4-DEMO03', show:'2026 aespa FAN MEETING', tier:'一般席', qty:1, plan:'Success-First', nick:'aespa_km', contact:'wechat:km0514', krw:121000, faceTotal:638, fee:96, total:734, deposit:100, balance:634, rate:0.15, adminStatus:'抢票中', lang:'ko', testMode:false, createdAt:new Date(Date.now()-86400000).toISOString(), note:'' },
+{ id:'M4-DEMO04', show:'2026 GISELLE B-day PARTY', tier:'任意席', qty:1, plan:'Success-First', nick:'gigi_lover', contact:'', krw:77000, faceTotal:406, fee:41, total:447, deposit:100, balance:347, rate:0.10, adminStatus:'已出票', lang:'zh', testMode:false, createdAt:new Date(Date.now()-3600000*5).toISOString(), note:'已出票，待客户确认' },
+{ id:'M4-DEMO05', show:'NMIXX 1ST WORLD TOUR', tier:'VIP席', qty:2, plan:'VIP-Priority', nick:'nmixx_4ever', contact:'wechat:nmixx_fan', krw:154000, faceTotal:1624, fee:325, total:1949, deposit:100, balance:1849, rate:0.20, adminStatus:'已取消', lang:'ja', testMode:false, createdAt:new Date(Date.now()-3600000*2).toISOString(), note:'客户主动取消，定金已退' },
+{ id:'M4-DEMO06', show:'2026 CHANYEOL B-day PARTY', tier:'一般席', qty:1, plan:'Success-First', nick:'cy_baby', contact:'wechat:cy_baby', krw:77000, faceTotal:406, fee:61, total:467, deposit:100, balance:367, rate:0.15, adminStatus:'待确认', lang:'zh', testMode:true, createdAt:new Date().toISOString(), note:'测试订单' },
+];
+const existing = getOrders();
+saveOrders(existing.concat(demo));
+renderAll();
+showMsg('已载入 6 条演示数据');
+}
+
+function download(content, filename, mime) {
+const blob = new Blob([content], { type: mime });
+const url = URL.createObjectURL(blob);
+const a = document.createElement('a');
+a.href = url; a.download = filename; a.click();
+URL.revokeObjectURL(url);
+}
+function showMsg(msg) {
+const toast = document.createElement('div');
+toast.className = 'fixed bottom-6 left-1/2 -translate-x-1/2 bg-ktext-primary text-white text-xs px-4 py-2 rounded-full shadow-lg z-[70]';
+toast.textContent = msg;
+document.body.appendChild(toast);
+setTimeout(() => toast.remove(), 2500);
+}
+
+// 手动同步云端
+async function syncCloud() {
+const btn = document.getElementById('sync-btn');
+btn.textContent = '🔄 同步中...';
+btn.disabled = true;
+await fetchCloudOrders();
+renderAll();
+btn.textContent = '🔄 同步云端';
+btn.disabled = false;
+showMsg('已同步云端数据，共 ' + getAllOrders().length + ' 条预约');
+}
+
+// ===== INIT =====
+if (sessionStorage.getItem('iykyk_admin_authed') === '1') {
+showDashboard();
+} else {
+document.getElementById('login-gate').classList.remove('hidden');
+document.getElementById('pwd').focus();
+}
+if (window.lucide) lucide.createIcons();
+</script>
+</body>
+</html>
